@@ -1,5 +1,6 @@
 import pyaudio
 import speech_recognition as sr
+import wave
 
 
 FORMAT = pyaudio.paInt16
@@ -64,6 +65,13 @@ finally:
 
    recognizer = sr.Recognizer()
    audio_data = sr.AudioData(raw_data, RATE, 2)
+
+   wf = wave.open("reference.wav", 'wb')
+   wf.setnchannels(CHANNELS)
+   wf.setsampwidth(audio.get_sample_size(FORMAT))
+   wf.setframerate(RATE)
+   wf.writeframes(b''.join(frames))
+   wf.close()
 
 
    text = recognizer.recognize_google(audio_data)
