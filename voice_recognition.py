@@ -1,69 +1,110 @@
-import numpy as np
-import pyaudio
 import speech_recognition as sr
-import threading
+import time
+from enum import Enum
 
+class ConversationState(Enum):
+    IDLE = "idle"
+    IN_CONVERSATION = "in_conversation"
 
-FORMAT = pyaudio.paInt16
-CHANNELS = 1
-RATE = 44100
-CHUNK = 1024
-THRESHOLD = 0.01
-
-
-audio = pyaudio.PyAudio()
-stream = None
-
-
-try:
-    input("Press ENTER to start recording...")
-    print("Recording... press ENTER again to stop.")
-
-
-    stream = audio.open(format=FORMAT,
-                       channels=CHANNELS,
-                       rate=RATE,
-                       input=True,
-                       frames_per_buffer=CHUNK)
-
-   # Use non-blocking check for stop signal
-    import threading
-
-    stop_flag = False
-
-
-    def wait_for_stop():
-       global stop_flag
-       input()  # Wait for ENTER
-       stop_flag = True
+class ContinuousSpeechListener:
+    def __init__(self):
+        self.recognizer = sr.Recognizer()
+        self.microphone = sr.Microphone()
+        self.conversation = False
+        self.trigger_word = "thank you"
+        
+        # Calibrate for ambient noise
+        with self.microphone as source:
+            print("🔧 Calibrating for ambient noise...")
+            self.recognizer.adjust_for_ambient_noise(source, duration=2)
+            print("✅ Calibration complete\n")
     
-    frames = []
+    def thing_1(self, text):
+        """Execute when conversation=False and speech detected"""
+        print(f"[THING 1] Processing: {text}")
+        self.conversation = True
+        # Your logic here
+        pass
+    
+    def thing_2(self, text):
+        """Execute on every speech detection"""
+        print(f"[THING 2] Processing: {text}")
+        # Your logic here
+        pass
+    
+    def thing_3(self, text):
+        """Execute on trigger word"""
+        print(f"[THING 3] Trigger detected: {text}")
+        # Your logic here
+        pass
+    
+    def check_trigger_word(self, text):
+        """Check if text contains any trigger word"""
 
-    threading.Thread(target=wait_for_stop, daemon=True).start()
-    while not stop_flag:
-        try:
-            data = stream.read(CHUNK, exception_on_overflow=False)
-            audio_np = np.frombuffer(data, dtype=np.int16).astype(np.float32)/32768.0
-            rms = np.sqrt(np.mean(audio_np**2))
-            if rms >= THRESHOLD:
-                frames.append(data)
+        text_lower = text.lower()
+        if self.trigger_word in text_lower:
+            return True
+        return False
+    
+    def process_speech(self, text):
+        """Main processing logic based on conversation state"""
+        print(f"\n{'='*60}")
+        print(f"State: {'IN_CONVERSATION' if self.conversation else 'IDLE'}")
+        print(f"Heard: '{text}'")
+        print(f"{'='*60}")
+        
+        # Check for trigger word first
+        if self.check_trigger_word(text):
+            self.thing_3(text)
+            self.conversation = False
+            print("🔴 Conversation ended\n")
+            return
+        
+        # Execute based on state
+        if not self.conversation:
+            # conversation = False: do thing 1 and thing 2
+            self.thing_1(text)
+            self.thing_2(text)
+        else:
+            # conversation = True: do only thing 2
+            self.thing_2(text)
+        
+        print()
+    
+    def listen_continuously(self):
+        """Continuously listen for speech"""
+        print("🎤 Continuous listener started")
+        print(f"   Trigger words: {', '.join(self.trigger_word)}")
+        print("   Press Ctrl+C to stop\n")
+        
+        with self.microphone as source:
+            while True:
+                try:
+                    print("👂 Listening...", end='\r')
+                    
+                    # Listen for speech (blocks until speech detected)
+                    audio = self.recognizer.listen(
+                        source,
+                        timeout=None,  # Wait indefinitely
+                        phrase_time_limit=None  # Max 10 seconds per phrase
+                    )
+                    
+                    try:
+                        # Recognize speech
+                        text = self.recognizer.recognize_google(audio)
+                        self.process_speech(text)
+                        
+                    except sr.UnknownValueError:
+                        print("❌ Couldn't understand that")
+                    except sr.RequestError as e:
+                        print(f"❌ Recognition error: {e}")
+                
+                except KeyboardInterrupt:
+                    print("\n\n👋 Stopping listener...")
+                    break
+                except Exception as e:
+                    print(f"Error: {e}")
 
-        except OSError as e:
-           print("Audio error:", e)
-           break
-
-
-finally:
-    print("Stopping...")
-    if stream and stream.is_active():
-        stream.stop_stream()
-    if stream:
-        stream.close()
-    audio.terminate()
-
-    recognizer = sr.Recognizer()
-
-    raw_data = b"".join(frames)
-    audio_data = sr.AudioData(raw_data, RATE, 2)
-    text = recognizer.recognize_google(audio_data)
-    print(text)
+# Usage
+listener = ContinuousSpeechListener()
+listener.listen_continuously()
